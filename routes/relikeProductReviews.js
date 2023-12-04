@@ -11,12 +11,14 @@ const insecurity = require('../lib/insecurity')
 module.exports = function productReviews () {
   return (req, res, next) => {
     const id = req.body.id
+    	ObjectId = id.Types.ObjectId;
     const user = insecurity.authenticatedUsers.from(req)
-    db.reviews.findOne({ _id: id }).then(review => {
+    const sanitizedId = ObjectId(id);
+    db.reviews.findOne({ _id: sanitizedId }).then(review => {
       var likedBy = review.likedBy
       if (!likedBy.includes(user.data.email)) {
         db.reviews.update(
-          { _id: id },
+          { _id: sanitizedId },
           { $inc: { likesCount: 1 } }
         ).then(
           result => {
