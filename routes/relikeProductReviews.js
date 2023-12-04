@@ -7,18 +7,17 @@ const utils = require('../lib/utils')
 const challenges = require('../data/datacache').challenges
 const db = require('../data/mongodb')
 const insecurity = require('../lib/insecurity')
+var sanitize = require('mongo-sanitize')
 
 module.exports = function productReviews () {
   return (req, res, next) => {
-    const id = req.body.id
-    	ObjectId = id.Types.ObjectId;
+    const id = sanitize(req.body.id)
     const user = insecurity.authenticatedUsers.from(req)
-    const sanitizedId = ObjectId(id);
-    db.reviews.findOne({ _id: sanitizedId }).then(review => {
+    db.reviews.findOne({ _id: id }).then(review => {
       var likedBy = review.likedBy
       if (!likedBy.includes(user.data.email)) {
         db.reviews.update(
-          { _id: sanitizedId },
+          { _id: id },
           { $inc: { likesCount: 1 } }
         ).then(
           result => {
