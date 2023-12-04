@@ -11,7 +11,7 @@ var sanitize = require('mongo-sanitize')
 
 module.exports = function productReviews () {
   return (req, res, next) => {
-    const id = sanitize(req.body.id)
+    const id = Number(sanitize(req.body.id))
     const user = insecurity.authenticatedUsers.from(req)
     db.reviews.findOne({ _id: id }).then(review => {
       var likedBy = review.likedBy
