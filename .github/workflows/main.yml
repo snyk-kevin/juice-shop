@@ -20,13 +20,13 @@ jobs:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         continue-on-error: true
         with:
-          args: --severity-threshold=medium --sarif
+          args: --severity-threshold=medium --report
 
       - name: Parse Results
         id: snyk_results
         uses: snyk-schmidtty/snyk-to-markdown-action@master
         with:
-          file-name: snyk.sarif
+          file-name: snyk.json
           
       - name: Checkout
         uses: b4den/comment-pr-action@master
