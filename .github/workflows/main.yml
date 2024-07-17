@@ -1,44 +1,101 @@
-name: PR Comment Example
+name: Snyk IaC Analysis and PR Comment
+
 on:
   pull_request_target:
     types: [opened, edited, synchronize, reopened]
 
 jobs:
-  comment-in-pr:
-
+  code-analysis-and-comment:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
-      repository-projects: write
-      id-token: write
 
     steps:
-      - name: Run Snyk IaC test
-        uses: snyk/actions/iac@master
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Run Snyk IaC Test
+        uses: snyk/actions/node@master
+        continue-on-error: true # To ensure the comment gets posted regardless of scan results
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-        continue-on-error: true
         with:
-          args: --severity-threshold=medium --sarif
+          command: 'iac test' # Specifies to run a code analysis
+          args: '--sarif-file-output=snyk-iac-results.sarif' # Outputs results in SARIF format
 
-      - name: Parse Results
-        id: snyk_results
-        uses: snyk-schmidtty/snyk-to-markdown-action@master
-        with:
-          file-name: snyk.sarif
-          
-      - name: Checkout
-        uses: b4den/comment-pr-action@master
+      - name: Comment in PR
+        uses: actions/github-script@v6
         env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-      - uses: actions/checkout@v4
-      - uses: actions/github-script@v6
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           script: |
+            const fs = require('fs');
+            const sarifPath = './snyk-iac-results.sarif';
+            let message = '👋 Thanks for reporting! The Snyk IaC scan was completed.';
+            try {
+              if (fs.existsSync(sarifPath)) {
+                const sarifOutput = JSON.parse(fs.readFileSync(sarifPath, 'utf8'));
+                let results = sarifOutput.runs && sarifOutput.runs[0].results ? sarifOutput.runs[0].results : [];
+
+                // Sorting logic to sort issues by severity from High to Low
+                results.sort((a, b) => {
+                  const severityLevels = { 'error': 1, 'warning': 2, 'note': 3, 'unknown': 4 };
+                  const severityA = severityLevels[a.level] || 4;
+                  const severityB = severityLevels[b.level] || 4;
+                  return severityA - severityB;
+                });
+
+                if (results.length > 0) {
+                  message += ` We found ${results.length} potential issues:\n\n`;
+                  message += '| Icon | Severity | Issue | URI | Problem |\n';
+                  message += '| --- | --- | --- | --- | --- |\n';
+
+                  results.forEach(result => {
+                    let icon;
+                    let severityText;
+                    switch(result.level) {
+                      case 'error':
+                        icon = '🔴'; // Red circle for high severity
+                        severityText = 'High';
+                        break;
+                      case 'warning':
+                        icon = '🟠'; // Orange circle for medium severity
+                        severityText = 'Medium';
+                        break;
+                      case 'note':
+                        icon = '🟡'; // Yellow circle for low severity
+                        severityText = 'Low';
+                        break;
+                      default:
+                        icon = '⚪'; // White circle for unknown severity
+                        severityText = 'Unknown';
+                        break;
+                    }
+
+                    const rule = sarifOutput.runs[0].tool.driver.rules.find(r => r.id === result.ruleId) || {};
+                    const shortDescription = rule.shortDescription && rule.shortDescription.text ? rule.shortDescription.text : 'No description available';
+                    const problemSeverity = rule.properties && rule.properties.problem && rule.properties.problem.severity ? rule.properties.problem.severity : 'Unknown severity';
+                    const uri = result.locations && result.locations[0] && result.locations[0].physicalLocation && result.locations[0].physicalLocation.artifactLocation ? result.locations[0].physicalLocation.artifactLocation.uri : 'Unknown URI';
+
+                    message += `| ${icon} | ${severityText} | ${rule.id} | ${uri} | ${shortDescription} (${problemSeverity}) |\n`;
+                  });
+                } else {
+                  message += ' No issues were found.';
+                }
+              } else {
+                message += ' No SARIF output file found, please check the action logs.';
+              }
+            } catch (error) {
+              console.error('Error processing SARIF output:', error);
+              message += ' An error occurred while processing the SARIF output.';
+            }
+
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: "${{ steps.snyk_results.outputs.vuln_text }}"
-            })
+              body: message
+            });

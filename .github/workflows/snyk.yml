@@ -1,0 +1,44 @@
+name: PR Comment Example
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  comment-in-pr:
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      repository-projects: write
+      id-token: write
+
+    steps:
+      - name: Run Snyk IaC test
+        uses: snyk/actions/iac@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        continue-on-error: true
+        with:
+          args: --severity-threshold=medium --sarif
+
+      - name: Parse Results
+        id: snyk_results
+        uses: snyk-schmidtty/snyk-to-markdown-action@master
+        with:
+          file-name: snyk.sarif
+          
+      - name: Checkout
+        uses: b4den/comment-pr-action@master
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - uses: actions/checkout@v4
+      - uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: "${{ steps.snyk_results.outputs.vuln_text }}"
+            })
