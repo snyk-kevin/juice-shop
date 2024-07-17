@@ -16,7 +16,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-
       - name: Run Snyk IaC Test
         uses: snyk/actions/node@master
         continue-on-error: true # To ensure the comment gets posted regardless of scan results
