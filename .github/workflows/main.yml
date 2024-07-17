@@ -22,7 +22,7 @@ jobs:
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
-          run: | 
+          run:  | 
               'auth' 
               'iac test' # Specifies to run a code analysis
           args: '--sarif-file-output=snyk-iac-results.sarif' # Outputs results in SARIF format
